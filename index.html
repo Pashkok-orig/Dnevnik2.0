@@ -80,8 +80,9 @@ svg{display:block}
 .mini{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#5A5A5A}
 .mini:active{background:var(--soft);color:var(--ink)}
 .mini svg{width:15px;height:15px}
-.date-wrap{position:relative;display:inline-flex}
-.date-wrap input{position:absolute;inset:0;opacity:0;width:100%;height:100%}
+/* невидимое поле даты заперто в размере иконки, корзинки подняты выше */
+.date-wrap input{position:absolute;left:0;top:0;width:30px;height:30px;min-width:0;max-width:30px;opacity:0;border:0;padding:0;margin:0;background:none;-webkit-appearance:none;appearance:none;z-index:1}
+.day-tools>.mini,.plan-acts>.mini{position:relative;z-index:2}
 .ed{font-family:'Spectral',Georgia,serif;font-size:16.5px;line-height:1.75;outline:none;color:var(--ink);-webkit-user-select:text;user-select:text}
 .day .ed{min-height:110px;padding-top:10px}
 .ed:empty::before{content:attr(data-placeholder);color:#B5B5B5;font-style:italic}
@@ -278,7 +279,7 @@ const fromISO = s => { const [y,m,d] = s.split('-').map(Number); return new Date
 const dayName = iso => { const d = fromISO(iso); return d.getDate() + ' ' + MONTHS[d.getMonth()]; };
 const plural = (n, f) => { n %= 100; if (n > 19 || n < 10) { const m = n % 10; if (m === 1) return f[0]; if (m >= 2 && m <= 4) return f[1]; } return f[2]; };
 
-/* ═══════════ Данные и сохранение (с двойной защитой) ═══════════ */
+/* ═══════════ Данные и сохранение (двойная защита) ═══════════ */
 const KEY = 'dnevnik.v2', KEY_BAK = 'dnevnik.v2.bak', KEY_OLD = 'dnevnik.v1';
 let state = null, ready = false, restoredFromBackup = false, saveTimer = null;
 
