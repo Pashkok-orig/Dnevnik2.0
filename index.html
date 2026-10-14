@@ -80,9 +80,6 @@ svg{display:block}
 .mini{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#5A5A5A}
 .mini:active{background:var(--soft);color:var(--ink)}
 .mini svg{width:15px;height:15px}
-/* невидимое поле даты заперто в размере иконки, корзинки подняты выше */
-.date-wrap input{position:absolute;left:0;top:0;width:30px;height:30px;min-width:0;max-width:30px;opacity:0;border:0;padding:0;margin:0;background:none;-webkit-appearance:none;appearance:none;z-index:1}
-.day-tools>.mini,.plan-acts>.mini{position:relative;z-index:2}
 .ed{font-family:'Spectral',Georgia,serif;font-size:16.5px;line-height:1.75;outline:none;color:var(--ink);-webkit-user-select:text;user-select:text}
 .day .ed{min-height:110px;padding-top:10px}
 .ed:empty::before{content:attr(data-placeholder);color:#B5B5B5;font-style:italic}
@@ -418,10 +415,7 @@ function dayCard(d){
     </button>
     ${open ? `<div class="day-body">
       <div class="day-tools">
-        <span class="date-wrap">
-          <button class="mini" aria-label="Изменить дату"><svg><use href="#i-calendar"/></svg></button>
-          <input type="date" class="day-date-input" value="${d.date}">
-        </span>
+        <button class="mini" data-act="date" aria-label="Изменить дату"><svg><use href="#i-calendar"/></svg></button>
         <button class="mini" data-act="del" aria-label="Удалить день"><svg><use href="#i-trash"/></svg></button>
       </div>
       <div class="ed" id="editor" contenteditable="true" data-placeholder="Как прошёл день?">${d.content || ''}</div>
@@ -442,8 +436,14 @@ function renderDays(){
     if (!card) return;
     const id = card.dataset.id;
     const act = e.target.closest('[data-act]');
-    if (act && act.dataset.act === 'del') { deleteDay(id); return; }
-    if (act && act.dataset.act === 'toggle') {
+    if (!act) return;
+    if (act.dataset.act === 'del') { deleteDay(id); return; }
+    if (act.dataset.act === 'date') {
+      const d = state.days.find(x => x.id === id);
+      if (d) changeDayDate(d);
+      return;
+    }
+    if (act.dataset.act === 'toggle') {
       state.openDay = state.openDay === id ? null : id;
       syncEditor();
       persist(); render();
@@ -455,12 +455,6 @@ function renderDays(){
     const card = e.target.closest('.day');
     const d = state.days.find(x => x.id === card.dataset.id);
     if (d) { d.content = e.target.innerHTML === '<br>' ? '' : e.target.innerHTML; saveSoon(); }
-  });
-  feed.addEventListener('change', e => {
-    if (!e.target.classList.contains('day-date-input')) return;
-    const card = e.target.closest('.day');
-    const d = state.days.find(x => x.id === card.dataset.id);
-    if (d && e.target.value) { d.date = e.target.value; flush(); render(); focusDay(d.id, false); }
   });
   const b = $('#emptyAdd');
   if (b) b.addEventListener('click', () => createDay(nextDayISO()));
@@ -507,6 +501,23 @@ function deleteDay(id){
   });
 }
 
+/* Смена даты дня — через окно, без невидимых полей */
+function changeDayDate(d){
+  openDialog(`
+    <h3 class="dlg-title">Дата дня</h3>
+    <label class="fld"><span>Выберите дату</span><input type="date" id="fDate" value="${d.date}"></label>
+    <div class="dlg-actions">
+      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-ink" id="fDateOk"><svg><use href="#i-check"/></svg>Готово</button>
+    </div>`, { center: true });
+  $('#fDateOk').addEventListener('click', () => {
+    const v = $('#fDate').value;
+    closeModal();
+    if (v && v !== d.date) { d.date = v; flush(); render(); focusDay(d.id, false); }
+  });
+  setTimeout(() => $('#fDate').focus(), 120);
+}
+
 /* ─── Планы на дни ─── */
 function sortedPlans(){ return [...state.plans].sort((a,b) => a.date < b.date ? -1 : 1); }
 
@@ -529,10 +540,7 @@ function planCard(p){
         <span class="day-dow">${sub}</span>
       </span>
       <span class="plan-acts">
-        <span class="date-wrap">
-          <button class="mini" aria-label="Изменить дату"><svg><use href="#i-calendar"/></svg></button>
-          <input type="date" class="plan-date-input" value="${p.date}">
-        </span>
+        <button class="mini" data-act="pdate" aria-label="Изменить дату"><svg><use href="#i-calendar"/></svg></button>
         <button class="mini" data-act="pdelplan" aria-label="Удалить план"><svg><use href="#i-trash"/></svg></button>
       </span>
     </div>
@@ -576,17 +584,12 @@ function renderPlans(){
     const act = e.target.closest('[data-act]');
     if (!act) return;
     if (act.dataset.act === 'pdelplan') { deletePlan(p.id); return; }
+    if (act.dataset.act === 'pdate') { changePlanDate(p); return; }
     const row = e.target.closest('.pitem');
     const it = row ? p.items.find(i => i.id === row.dataset.it) : null;
     if (!it) return;
     if (act.dataset.act === 'ptoggle') { it.done = !it.done; persist(); renderPlans(); }
     else if (act.dataset.act === 'pdel') deletePlanItem(p, it);
-  });
-  feed.addEventListener('change', e => {
-    if (!e.target.classList.contains('plan-date-input')) return;
-    const card = e.target.closest('.plan');
-    const p = state.plans.find(x => x.id === card.dataset.id);
-    if (p && e.target.value) { p.date = e.target.value; persist(); renderPlans(); }
   });
   feed.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.classList.contains('plan-add-input')) {
@@ -594,6 +597,22 @@ function renderPlans(){
       addPlanItemFrom(e.target);
     }
   });
+}
+
+function changePlanDate(p){
+  openDialog(`
+    <h3 class="dlg-title">Дата плана</h3>
+    <label class="fld"><span>Выберите дату</span><input type="date" id="fDate" value="${p.date}"></label>
+    <div class="dlg-actions">
+      <button class="btn-ghost" data-close>Отмена</button>
+      <button class="btn-ink" id="fDateOk"><svg><use href="#i-check"/></svg>Готово</button>
+    </div>`, { center: true });
+  $('#fDateOk').addEventListener('click', () => {
+    const v = $('#fDate').value;
+    closeModal();
+    if (v && v !== p.date) { p.date = v; persist(); renderPlans(); }
+  });
+  setTimeout(() => $('#fDate').focus(), 120);
 }
 
 function addPlanItemFrom(inp){
@@ -1160,7 +1179,6 @@ function backupSheet(){
   });
 }
 
-/* Напоминание о копии раз в неделю */
 function maybeBackupReminder(){
   try {
     const last = +localStorage.getItem('dnevnik.lastExport') || 0;
@@ -1170,7 +1188,6 @@ function maybeBackupReminder(){
   } catch(e){}
 }
 
-/* Полный сброс с подтверждением */
 function resetAll(){
   openDialog(`
     <h3 class="dlg-title">Начать с чистого листа?</h3>
@@ -1214,13 +1231,14 @@ function installPWA(){
 }
 
 /* ═══════════ Запуск ═══════════ */
+const VERSION = 'v5';
 function init(){
   state = load() || seed();
   if (state.active !== 'days' && state.active !== 'plans' && state.active !== 'terms' && !state.sections.some(s => s.id === state.active)) state.active = 'days';
   if (state.openDay && !state.days.some(d => d.id === state.openDay)) state.openDay = null;
 
   const now = new Date();
-  $('#todayLine').textContent = DOW[now.getDay()] + ', ' + now.getDate() + ' ' + MONTHS[now.getMonth()];
+  $('#todayLine').textContent = DOW[now.getDay()] + ', ' + now.getDate() + ' ' + MONTHS[now.getMonth()] + ' · ' + VERSION;
 
   $('#tabs').addEventListener('click', e => {
     const t = e.target.closest('.tab');
